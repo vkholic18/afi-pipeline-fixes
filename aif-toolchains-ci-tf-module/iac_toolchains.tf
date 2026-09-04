@@ -229,9 +229,9 @@ module "toolchains" {
       name = var.tc_name
       # 1. operations repo — sample-operations-metadata where GitHub Issues fire from
       operations_repo_url = var.tc_operations_repo_url
-      pipeline_name = "afi"
-      resource_grp  = "AIF_DEV" # we cannot use optional
-      tags          = ["type:AFI", "toolchains:AFI"]
+      pipeline_name       = "afi"
+      resource_grp        = "AIF_DEV" # we cannot use optional
+      tags                = ["type:AFI", "toolchains:AFI"]
 
       # afi repo — AFI pipeline config and scripts repo
       afi_repo_url = var.tc_afi_repo_url
@@ -252,3 +252,4 @@ module "toolchains" {
 
   ]
 }
+
