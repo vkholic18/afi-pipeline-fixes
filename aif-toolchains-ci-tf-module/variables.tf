@@ -3,6 +3,13 @@ variable "ibmcloud_api_key" {
   type      = string
 }
 
+variable "ibmcloud_api_key_value" {
+  sensitive   = true
+  type        = string
+  description = "IBM Cloud API Key value (alternative parameter name)"
+  default     = ""
+}
+
 variable "region" {
   type    = string
   default = "us-south"

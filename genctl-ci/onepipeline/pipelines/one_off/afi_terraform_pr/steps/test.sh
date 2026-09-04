@@ -110,8 +110,23 @@ export PLAN_SUMMARY=$(grep -E '^Plan:' ${PATH_TO_WORKSPACE}/plan_show.txt || ech
 echo "Plan summary: $PLAN_SUMMARY"
 
 echo "This is a PR pipeline, sending plan report"
+# Validate PR_NUMBER is set before proceeding
+if [[ -z "${PR_NUMBER:-}" ]]; then
+  echo "WARNING: PR_NUMBER is empty, using alternative extraction methods..."
+  # Try to extract from PULL_REQUEST_URL or other available variables
+  if [[ -n "${PULL_REQUEST_URL:-}" ]]; then
+    export PR_NUMBER=$(echo "${PULL_REQUEST_URL}" | grep -o '[^/]*$')
+  elif [[ -n "${PR_URL:-}" ]]; then
+    export PR_NUMBER=$(echo "${PR_URL}" | grep -o '[^/]*$')
+  else
+    echo "ERROR: Could not determine PR_NUMBER. Pipeline properties may not be set correctly."
+    exit 1
+  fi
+  echo "Extracted PR_NUMBER: $PR_NUMBER"
+fi
+
 python3 -m pip install -r ${PATH_TO_GENCTL_CI}/scripts/terraform_helper_funcs/requirements.txt
-echo python3 ${PATH_TO_GENCTL_CI}/scripts/terraform_helper_funcs/add_comment.py -pn $PR_NUMBER
+echo "Running: python3 ${PATH_TO_GENCTL_CI}/scripts/terraform_helper_funcs/add_comment.py -pn $PR_NUMBER"
 python3 ${PATH_TO_GENCTL_CI}/scripts/terraform_helper_funcs/add_comment.py -pn $PR_NUMBER
 
 # Send Slack notification — verdict reflects plan success/failure
