@@ -55,9 +55,16 @@ source ${PATH_TO_PIPELINE}/environment/aliases.sh
 # Clone app repo if not already present (simple-execute listener does not clone it automatically)
 if [[ ! -d "${PATH_TO_WORKSPACE}" ]]; then
   _GH_HOST=$(get_env GITHUB_API_URL | sed 's|https://||;s|/api/v3||')
-  _CLONE_BRANCH="$(get_env APP_REPO_BRANCH "main")"
-  echo "Cloning app repo ${WORKSPACE_REPO} branch=${_CLONE_BRANCH} into ${PATH_TO_WORKSPACE}..."
-  git clone --branch "${_CLONE_BRANCH}" "https://${GITHUB_API_KEY}@${_GH_HOST}/${WORKSPACE_ORG}/${WORKSPACE_REPO}.git" "${PATH_TO_WORKSPACE}"
+  _CLONE_BRANCH="$(get_env APP_REPO_BRANCH "")"
+  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env WORKSPACE_REPO_BRANCH "")"
+  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env repo_branch "")"
+  if [[ -n "${_CLONE_BRANCH}" ]]; then
+    echo "Cloning app repo ${WORKSPACE_REPO} branch=${_CLONE_BRANCH} into ${PATH_TO_WORKSPACE}..."
+    git clone --branch "${_CLONE_BRANCH}" "https://${GITHUB_API_KEY}@${_GH_HOST}/${WORKSPACE_ORG}/${WORKSPACE_REPO}.git" "${PATH_TO_WORKSPACE}"
+  else
+    echo "Cloning app repo ${WORKSPACE_REPO} using remote default branch into ${PATH_TO_WORKSPACE}..."
+    git clone "https://${GITHUB_API_KEY}@${_GH_HOST}/${WORKSPACE_ORG}/${WORKSPACE_REPO}.git" "${PATH_TO_WORKSPACE}"
+  fi
 fi
 
 cd ${PATH_TO_WORKSPACE}
