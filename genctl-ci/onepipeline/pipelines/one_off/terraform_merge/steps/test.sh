@@ -51,22 +51,45 @@ source $PATH_TO_PIPELINE/environment/vars.sh
 source $PATH_TO_PIPELINE/environment/secrets.sh
 source $PATH_TO_PIPELINE/environment/aliases.sh
 
-# Clone app repo if not already present (simple-execute listener does not clone it automatically)
+# Clone app repo if not already present, then pin to merge SHA/branch from trigger metadata.
+_GH_HOST=$(get_env GITHUB_API_URL | sed 's|https://||;s|/api/v3||')
+_REPO_URL="https://${GITHUB_API_KEY}@${_GH_HOST}/${WORKSPACE_ORG}/${WORKSPACE_REPO}.git"
+
+TARGET_SHA=$(get_env "MERGE_COMMIT_SHA" "")
+[[ -z "${TARGET_SHA}" ]] && TARGET_SHA=$(get_env "GIT_COMMIT" "")
+[[ -z "${TARGET_SHA}" ]] && TARGET_SHA=$(get_env "COMMIT_SHA" "")
+[[ -z "${TARGET_SHA}" ]] && TARGET_SHA=$(get_env "merge_commit_sha" "")
+
+TARGET_BRANCH=$(get_env "APP_REPO_BRANCH" "")
+[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "WORKSPACE_REPO_BRANCH" "")
+[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "repo_branch" "")
+
 if [[ ! -d "${PATH_TO_WORKSPACE}" ]]; then
-  _GH_HOST=$(get_env GITHUB_API_URL | sed 's|https://||;s|/api/v3||')
-  _CLONE_BRANCH="$(get_env APP_REPO_BRANCH "")"
-  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env WORKSPACE_REPO_BRANCH "")"
-  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env repo_branch "")"
-  if [[ -n "${_CLONE_BRANCH}" ]]; then
-    echo "Cloning app repo ${WORKSPACE_REPO} branch=${_CLONE_BRANCH} into ${PATH_TO_WORKSPACE}..."
-    git clone --branch "${_CLONE_BRANCH}" "https://${GITHUB_API_KEY}@${_GH_HOST}/${WORKSPACE_ORG}/${WORKSPACE_REPO}.git" "${PATH_TO_WORKSPACE}"
+  if [[ -n "${TARGET_BRANCH}" ]]; then
+    echo "Cloning app repo ${WORKSPACE_REPO} branch=${TARGET_BRANCH} into ${PATH_TO_WORKSPACE}..."
+    git clone --branch "${TARGET_BRANCH}" "${_REPO_URL}" "${PATH_TO_WORKSPACE}"
   else
     echo "Cloning app repo ${WORKSPACE_REPO} using remote default branch into ${PATH_TO_WORKSPACE}..."
-    git clone "https://${GITHUB_API_KEY}@${_GH_HOST}/${WORKSPACE_ORG}/${WORKSPACE_REPO}.git" "${PATH_TO_WORKSPACE}"
+    git clone "${_REPO_URL}" "${PATH_TO_WORKSPACE}"
   fi
 fi
 
 cd ${PATH_TO_WORKSPACE}
+
+if [[ -n "${TARGET_SHA}" ]]; then
+  echo "Checking out merge commit SHA: ${TARGET_SHA}"
+  git fetch --depth=1 origin "${TARGET_SHA}" || true
+  git checkout --detach "${TARGET_SHA}"
+elif [[ -n "${TARGET_BRANCH}" ]]; then
+  echo "Checking out trigger branch: ${TARGET_BRANCH}"
+  git fetch --depth=1 origin "${TARGET_BRANCH}" || true
+  git checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
+else
+  echo "No trigger SHA/branch found; using currently checked out ref."
+fi
+
+echo "Final checkout commit: $(git rev-parse HEAD)"
+echo "Final checkout branch: $(git branch --show-current || true)"
 
 GIT_SHA=$(git rev-parse --verify HEAD)
 
