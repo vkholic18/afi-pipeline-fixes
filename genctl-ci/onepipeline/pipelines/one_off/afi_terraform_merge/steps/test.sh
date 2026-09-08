@@ -78,14 +78,17 @@ fi
 
 cd ${PATH_TO_WORKSPACE}
 
-if [[ -n "${TARGET_SHA}" ]]; then
-  echo "Checking out merge commit SHA: ${TARGET_SHA}"
-  git fetch --depth=1 origin "${TARGET_SHA}" || true
-  git checkout --detach "${TARGET_SHA}"
-elif [[ -n "${TARGET_BRANCH}" ]]; then
+if [[ -n "${TARGET_BRANCH}" ]]; then
+  # Prefer the branch tip: for push-triggered merge pipelines the SHA from
+  # trigger metadata can be stale (not refreshed on rerun), while the branch
+  # always reflects the latest merged commit.
   echo "Checking out trigger branch: ${TARGET_BRANCH}"
   git fetch --depth=1 origin "${TARGET_BRANCH}" || true
   git checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
+elif [[ -n "${TARGET_SHA}" ]]; then
+  echo "Checking out merge commit SHA: ${TARGET_SHA}"
+  git fetch --depth=1 origin "${TARGET_SHA}" || true
+  git checkout --detach "${TARGET_SHA}"
 else
   echo "No trigger SHA/branch found; using currently checked out ref."
 fi
