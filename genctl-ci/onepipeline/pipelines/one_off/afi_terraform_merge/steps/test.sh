@@ -70,6 +70,9 @@ TARGET_BRANCH=$(get_env "base-branch" "")
 [[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "WORKSPACE_REPO_BRANCH" "")
 [[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "repo_branch" "")
 
+echo "DEBUG: Detected merge target branch: '${TARGET_BRANCH}'"
+echo "DEBUG: Detected merge target SHA: '${TARGET_SHA}'"
+
 if [[ ! -d "${PATH_TO_WORKSPACE}" ]]; then
   if [[ -n "${TARGET_BRANCH}" ]]; then
     echo "Cloning app repo ${WORKSPACE_REPO} branch=${TARGET_BRANCH} into ${PATH_TO_WORKSPACE}..."

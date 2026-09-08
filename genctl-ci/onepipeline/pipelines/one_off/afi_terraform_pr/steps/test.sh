@@ -62,6 +62,7 @@ if [[ ! -d "${PATH_TO_WORKSPACE}" ]]; then
   [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env APP_REPO_BRANCH "")"
   [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env WORKSPACE_REPO_BRANCH "")"
   [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env repo_branch "")"
+  echo "DEBUG: Detected PR clone branch: '${_CLONE_BRANCH}'"
   if [[ -n "${_CLONE_BRANCH}" ]]; then
     echo "Cloning app repo ${WORKSPACE_REPO} branch=${_CLONE_BRANCH} into ${PATH_TO_WORKSPACE}..."
     git clone --branch "${_CLONE_BRANCH}" "https://${GITHUB_API_KEY}@${_GH_HOST}/${WORKSPACE_ORG}/${WORKSPACE_REPO}.git" "${PATH_TO_WORKSPACE}"
