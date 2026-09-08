@@ -55,7 +55,9 @@ source ${PATH_TO_PIPELINE}/environment/aliases.sh
 # Clone app repo if not already present (simple-execute listener does not clone it automatically)
 if [[ ! -d "${PATH_TO_WORKSPACE}" ]]; then
   _GH_HOST=$(get_env GITHUB_API_URL | sed 's|https://||;s|/api/v3||')
-  _CLONE_BRANCH="$(get_env APP_REPO_BRANCH "")"
+  # For PR pipeline, use branch variable which represents the source branch
+  _CLONE_BRANCH="$(get_env branch "")"
+  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env APP_REPO_BRANCH "")"
   [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env WORKSPACE_REPO_BRANCH "")"
   [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env repo_branch "")"
   if [[ -n "${_CLONE_BRANCH}" ]]; then
@@ -68,6 +70,26 @@ if [[ ! -d "${PATH_TO_WORKSPACE}" ]]; then
 fi
 
 cd ${PATH_TO_WORKSPACE}
+
+# For PR pipeline, checkout to the specific PR head commit if available
+_PR_SHA="$(get_env "PR_HEADSHA" "")"
+[[ -z "${_PR_SHA}" ]] && _PR_SHA="$(get_env "head-commit-id" "")"
+if [[ -n "${_PR_SHA}" ]]; then
+  echo "Checking out PR head commit: ${_PR_SHA}"
+  git fetch --depth=1 origin "${_PR_SHA}" || true
+  git checkout --detach "${_PR_SHA}" 2>/dev/null || git checkout "${_PR_SHA}"
+elif [[ -n "$(get_env "PR_NUMBER" "")" ]]; then
+  # Alternative: fetch PR directly by PR_NUMBER
+  _PR_NUMBER="$(get_env pr-number "")"
+  if [[ -n "${_PR_NUMBER}" ]]; then
+    echo "Checking out PR ${_PR_NUMBER} head..."
+    git fetch origin "pull/${_PR_NUMBER}/head:pr-${_PR_NUMBER}" || true
+    git checkout "pr-${_PR_NUMBER}"
+  fi
+fi
+
+echo "Final checkout commit: $(git rev-parse HEAD)"
+echo "Final checkout branch: $(git branch --show-current || echo '(detached HEAD)')"
 
 # setup artifactory backend creds
 ${PATH_TO_GENCTL_CI}/scripts/terraform_helper_funcs/setup_terraform.sh
