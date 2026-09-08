@@ -148,10 +148,11 @@ if [[ "${MD5_PR}" != "${MD5SUM_MERGE}" ]]; then
 fi
 
 # apply the plan if this is a merge pipeline (double check)
-echo "DEBUG: get_env pipeline_namespace = '$(get_env pipeline_namespace)'"
-echo "DEBUG: raw env pipeline_namespace = '${pipeline_namespace:-}'"
-echo "DEBUG: raw env PIPELINE_NAMESPACE = '${PIPELINE_NAMESPACE:-}'"
-if [[ "$(get_env pipeline_namespace)" == *"ci"* ]]; then
+# NOTE: "pipeline_namespace" is a reserved OnePipeline system property (auto-set to
+# "simple-automation" for simple-execute tasks) and collides with/shadows any custom
+# trigger property of the same name. Use "apply_namespace" instead for the custom gate.
+echo "DEBUG: get_env apply_namespace = '$(get_env apply_namespace)'"
+if [[ "$(get_env apply_namespace)" == *"ci"* ]]; then
   echo "This is a CI pipeline, applying plan..."
   terraform apply -parallelism=3 ${PATH_TO_WORKSPACE}/plantf \
       && export APPLY_STATUS="Success" || export APPLY_STATUS="Failure"
