@@ -56,16 +56,14 @@ _GH_HOST=$(get_env GITHUB_API_URL | sed 's|https://||;s|/api/v3||')
 _REPO_URL="https://${GITHUB_API_KEY}@${_GH_HOST}/${WORKSPACE_ORG}/${WORKSPACE_REPO}.git"
 
 # Extract merge target branch and SHA from trigger event (base-branch/base_branch or BASE-BRANCH/BASE_SHA from webhook)
-TARGET_SHA=$(get_env "base-sha" "")
-[[ -z "${TARGET_SHA}" ]] && TARGET_SHA=$(get_env "base_sha" "")
-[[ -z "${TARGET_SHA}" ]] && TARGET_SHA=$(get_env "BASE-SHA" "")
-[[ -z "${TARGET_SHA}" ]] && TARGET_SHA=$(get_env "BASE_SHA" "")
+TARGET_SHA="${BASE_SHA:-}"
+[[ -z "${TARGET_SHA}" ]] && TARGET_SHA="${base_sha:-}"
+[[ -z "${TARGET_SHA}" ]] && TARGET_SHA="${base-sha:-}"
 echo "DEBUG: Detected merge target SHA from event: '${TARGET_SHA}'"
 
-TARGET_BRANCH=$(get_env "base-branch" "")
-[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "base_branch" "")
-[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "BASE-BRANCH" "")
-[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "BASE_BRANCH" "")
+TARGET_BRANCH="${BASE_BRANCH:-}"
+[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH="${base_branch:-}"
+[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH="${base-branch:-}"
 echo "DEBUG: Detected merge target branch from event: '${TARGET_BRANCH}'"
 
 if [[ ! -d "${PATH_TO_WORKSPACE}" ]]; then
