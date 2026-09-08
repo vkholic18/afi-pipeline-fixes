@@ -148,6 +148,9 @@ if [[ "${MD5_PR}" != "${MD5SUM_MERGE}" ]]; then
 fi
 
 # apply the plan if this is a merge pipeline (double check)
+echo "DEBUG: get_env pipeline_namespace = '$(get_env pipeline_namespace)'"
+echo "DEBUG: raw env pipeline_namespace = '${pipeline_namespace:-}'"
+echo "DEBUG: raw env PIPELINE_NAMESPACE = '${PIPELINE_NAMESPACE:-}'"
 if [[ "$(get_env pipeline_namespace)" == *"ci"* ]]; then
   echo "This is a CI pipeline, applying plan..."
   terraform apply -parallelism=3 ${PATH_TO_WORKSPACE}/plantf \
