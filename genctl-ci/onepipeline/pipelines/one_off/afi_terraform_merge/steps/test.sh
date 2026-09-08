@@ -55,12 +55,15 @@ source $PATH_TO_PIPELINE/environment/aliases.sh
 _GH_HOST=$(get_env GITHUB_API_URL | sed 's|https://||;s|/api/v3||')
 _REPO_URL="https://${GITHUB_API_KEY}@${_GH_HOST}/${WORKSPACE_ORG}/${WORKSPACE_REPO}.git"
 
-TARGET_SHA=$(get_env "MERGE_COMMIT_SHA" "")
+TARGET_SHA=$(get_env "base-sha" "")
+[[ -z "${TARGET_SHA}" ]] && TARGET_SHA=$(get_env "BASE-SHA" "")
+[[ -z "${TARGET_SHA}" ]] && TARGET_SHA=$(get_env "MERGE_COMMIT_SHA" "")
 [[ -z "${TARGET_SHA}" ]] && TARGET_SHA=$(get_env "APP_REPO_COMMIT" "")
 [[ -z "${TARGET_SHA}" ]] && TARGET_SHA=$(get_env "COMMIT_SHA" "")
 [[ -z "${TARGET_SHA}" ]] && TARGET_SHA=$(get_env "merge_commit_sha" "")
 
 TARGET_BRANCH=$(get_env "base-branch" "")
+[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "BASE-BRANCH" "")
 [[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "BASE_BRANCH" "")
 [[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "base_branch" "")
 [[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "APP_REPO_BRANCH" "")

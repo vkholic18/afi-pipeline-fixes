@@ -55,10 +55,9 @@ source ${PATH_TO_PIPELINE}/environment/aliases.sh
 # Clone app repo if not already present (simple-execute listener does not clone it automatically)
 if [[ ! -d "${PATH_TO_WORKSPACE}" ]]; then
   _GH_HOST=$(get_env GITHUB_API_URL | sed 's|https://||;s|/api/v3||')
-  # For PR pipeline, automatically extract source branch from PR event (head_ref from GitHub API)
-  _CLONE_BRANCH="$(get_env head_ref "")"
-  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env pr_source_branch "")"
-  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env SOURCE_BRANCH "")"
+  # For PR pipeline, extract source branch from PR event (head-branch, compatible with both cases)
+  _CLONE_BRANCH="$(get_env head-branch "")"
+  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env HEAD-BRANCH "")"
   [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env branch "")"
   [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env APP_REPO_BRANCH "")"
   [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env WORKSPACE_REPO_BRANCH "")"
@@ -75,8 +74,9 @@ fi
 cd ${PATH_TO_WORKSPACE}
 
 # For PR pipeline, checkout to the specific PR head commit if available
-_PR_SHA="$(get_env "PR_HEADSHA" "")"
-[[ -z "${_PR_SHA}" ]] && _PR_SHA="$(get_env "head-commit-id" "")"
+_PR_SHA="$(get_env "head-sha" "")"
+[[ -z "${_PR_SHA}" ]] && _PR_SHA="$(get_env "HEAD-SHA" "")"
+[[ -z "${_PR_SHA}" ]] && _PR_SHA="$(get_env "head_commit_id" "")"
 if [[ -n "${_PR_SHA}" ]]; then
   echo "Checking out PR head commit: ${_PR_SHA}"
   git fetch --depth=1 origin "${_PR_SHA}" || true
