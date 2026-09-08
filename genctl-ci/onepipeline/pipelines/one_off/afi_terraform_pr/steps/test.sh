@@ -55,14 +55,12 @@ source ${PATH_TO_PIPELINE}/environment/aliases.sh
 # Clone app repo if not already present (simple-execute listener does not clone it automatically)
 if [[ ! -d "${PATH_TO_WORKSPACE}" ]]; then
   _GH_HOST=$(get_env GITHUB_API_URL | sed 's|https://||;s|/api/v3||')
-  # For PR pipeline, extract source branch from PR event (head-branch, compatible with both cases)
+  # For PR pipeline, extract source branch from PR event (head-branch/head_branch or HEAD-BRANCH/HEAD_BRANCH from GitHub webhook)
   _CLONE_BRANCH="$(get_env head-branch "")"
+  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env head_branch "")"
   [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env HEAD-BRANCH "")"
-  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env branch "")"
-  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env APP_REPO_BRANCH "")"
-  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env WORKSPACE_REPO_BRANCH "")"
-  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env repo_branch "")"
-  echo "DEBUG: Detected PR clone branch: '${_CLONE_BRANCH}'"
+  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env HEAD_BRANCH "")"
+  echo "DEBUG: Detected PR clone branch from event: '${_CLONE_BRANCH}'"
   if [[ -n "${_CLONE_BRANCH}" ]]; then
     echo "Cloning app repo ${WORKSPACE_REPO} branch=${_CLONE_BRANCH} into ${PATH_TO_WORKSPACE}..."
     git clone --branch "${_CLONE_BRANCH}" "https://${GITHUB_API_KEY}@${_GH_HOST}/${WORKSPACE_ORG}/${WORKSPACE_REPO}.git" "${PATH_TO_WORKSPACE}"
@@ -76,20 +74,16 @@ cd ${PATH_TO_WORKSPACE}
 
 # For PR pipeline, checkout to the specific PR head commit if available
 _PR_SHA="$(get_env "head-sha" "")"
+[[ -z "${_PR_SHA}" ]] && _PR_SHA="$(get_env "head_sha" "")"
 [[ -z "${_PR_SHA}" ]] && _PR_SHA="$(get_env "HEAD-SHA" "")"
-[[ -z "${_PR_SHA}" ]] && _PR_SHA="$(get_env "head_commit_id" "")"
+[[ -z "${_PR_SHA}" ]] && _PR_SHA="$(get_env "HEAD_SHA" "")"
+echo "DEBUG: Detected PR head SHA from event: '${_PR_SHA}'"
 if [[ -n "${_PR_SHA}" ]]; then
   echo "Checking out PR head commit: ${_PR_SHA}"
   git fetch --depth=1 origin "${_PR_SHA}" || true
   git checkout --detach "${_PR_SHA}" 2>/dev/null || git checkout "${_PR_SHA}"
-elif [[ -n "$(get_env "PR_NUMBER" "")" ]]; then
-  # Alternative: fetch PR directly by PR_NUMBER
-  _PR_NUMBER="$(get_env pr-number "")"
-  if [[ -n "${_PR_NUMBER}" ]]; then
-    echo "Checking out PR ${_PR_NUMBER} head..."
-    git fetch origin "pull/${_PR_NUMBER}/head:pr-${_PR_NUMBER}" || true
-    git checkout "pr-${_PR_NUMBER}"
-  fi
+else
+  echo "Warning: No PR head SHA detected from event; using cloned branch as-is"
 fi
 
 echo "Final checkout commit: $(git rev-parse HEAD)"
