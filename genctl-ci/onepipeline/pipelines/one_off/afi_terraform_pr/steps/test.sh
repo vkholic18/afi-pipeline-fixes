@@ -55,8 +55,11 @@ source ${PATH_TO_PIPELINE}/environment/aliases.sh
 # Clone app repo if not already present (simple-execute listener does not clone it automatically)
 if [[ ! -d "${PATH_TO_WORKSPACE}" ]]; then
   _GH_HOST=$(get_env GITHUB_API_URL | sed 's|https://||;s|/api/v3||')
-  # For PR pipeline, use branch variable which represents the source branch
-  _CLONE_BRANCH="$(get_env branch "")"
+  # For PR pipeline, automatically extract source branch from PR event (head_ref from GitHub API)
+  _CLONE_BRANCH="$(get_env head_ref "")"
+  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env pr_source_branch "")"
+  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env SOURCE_BRANCH "")"
+  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env branch "")"
   [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env APP_REPO_BRANCH "")"
   [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env WORKSPACE_REPO_BRANCH "")"
   [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="$(get_env repo_branch "")"
