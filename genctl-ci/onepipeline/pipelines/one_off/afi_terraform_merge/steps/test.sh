@@ -147,54 +147,52 @@ if [[ "${MD5_PR}" != "${MD5SUM_MERGE}" ]]; then
     exit 1
 fi
 
-# apply the plan if this is a merge pipeline (double check)
-# NOTE: "pipeline_namespace" is a reserved OnePipeline system property (auto-set to
-# "simple-automation" for simple-execute tasks) and collides with/shadows any custom
-# trigger property of the same name. Use "apply_namespace" instead for the custom gate.
-echo "DEBUG: get_env apply_namespace = '$(get_env apply_namespace)'"
-if [[ "$(get_env apply_namespace)" == *"ci"* ]]; then
-  echo "This is a CI pipeline, applying plan..."
-  terraform apply -parallelism=3 ${PATH_TO_WORKSPACE}/plantf \
-      && export APPLY_STATUS="Success" || export APPLY_STATUS="Failure"
-  echo "apply status $APPLY_STATUS"
+# apply the plan
+echo "Applying plan..."
+terraform apply -parallelism=3 ${PATH_TO_WORKSPACE}/plantf \
+    && export APPLY_STATUS="Success" || export APPLY_STATUS="Failure"
+echo "apply status $APPLY_STATUS"
 
-  # =============================================================================
-  # Slack notification — apply result
-  # =============================================================================
-  UTILS_DIR="${PATH_TO_GENCTL_CI}/onepipeline/utils"
+# =============================================================================
+# Slack notification — apply result
+# =============================================================================
+UTILS_DIR="${PATH_TO_GENCTL_CI}/onepipeline/utils"
 
-  # Extract the plan summary line for context in the notification
-  PLAN_SUMMARY=$(grep -E '^Plan:' ${PATH_TO_WORKSPACE}/plan_show.txt || echo "Plan: N/A")
+# Extract the plan summary line for context in the notification
+PLAN_SUMMARY=$(grep -E '^Plan:' ${PATH_TO_WORKSPACE}/plan_show.txt || echo "Plan: N/A")
 
-  # Map apply result to a verdict the notifier understands (green=APPROVE, red=BLOCK)
-  if [[ "${APPLY_STATUS}" == "Success" ]]; then
-      _APPLY_VERDICT="SUCCESS"
-      _APPLY_SUMMARY="Apply: SUCCESS | ${PLAN_SUMMARY}"
-  else
-      _APPLY_VERDICT="FAILURE"
-      _APPLY_SUMMARY="Apply: FAILURE | ${PLAN_SUMMARY}"
-  fi
+# Map apply result to a verdict the notifier understands (green=APPROVE, red=BLOCK)
+if [[ "${APPLY_STATUS}" == "Success" ]]; then
+    _APPLY_VERDICT="SUCCESS"
+    _APPLY_SUMMARY="Apply: SUCCESS | ${PLAN_SUMMARY}"
+else
+    _APPLY_VERDICT="FAILURE"
+    _APPLY_SUMMARY="Apply: FAILURE | ${PLAN_SUMMARY}"
+fi
 
-  # Only tag on failure — a successful merge apply needs no human attention
-  _MERGE_TAG_ARG=()
-  [[ "${APPLY_STATUS}" != "Success" ]] && _MERGE_TAG_ARG=(--tag-group "${SLACK_TAG_GROUP:-}")
+# Only tag on failure — a successful merge apply needs no human attention
+_MERGE_TAG_ARG=()
+[[ "${APPLY_STATUS}" != "Success" ]] && _MERGE_TAG_ARG=(--tag-group "${SLACK_TAG_GROUP:-}")
 
-  echo "[SLACK] Posting apply result to Slack..."
-  bash "${UTILS_DIR}/notify_terraform_review.sh" \
-      --webhook-url    "${SLACK_WEBHOOK_URL:-}" \
-      --channel        "${SLACK_CHANNEL:-}" \
-      --verdict        "${_APPLY_VERDICT}" \
-      --pipeline-url   "${PIPELINE_RUN_URL:-}" \
-      "${_MERGE_TAG_ARG[@]}" \
-      --workspace      "${workspace_name}" \
-      --mode           "infrastructure" \
-      --pipeline-type  "Merge" \
-      --repo           "${WORKSPACE_REPO:-}" \
-      --plan-summary   "${_APPLY_SUMMARY}" || true   # non-fatal
+echo "[SLACK] Posting apply result to Slack..."
+bash "${UTILS_DIR}/notify_terraform_review.sh" \
+    --webhook-url    "${SLACK_WEBHOOK_URL:-}" \
+    --channel        "${SLACK_CHANNEL:-}" \
+    --verdict        "${_APPLY_VERDICT}" \
+    --pipeline-url   "${PIPELINE_RUN_URL:-}" \
+    "${_MERGE_TAG_ARG[@]}" \
+    --workspace      "${workspace_name}" \
+    --mode           "infrastructure" \
+    --pipeline-type  "Merge" \
+    --repo           "${WORKSPACE_REPO:-}" \
+    --plan-summary   "${_APPLY_SUMMARY}" || true   # non-fatal
 
-  # Exit non-zero if apply failed so the pipeline step is marked as failed
-  if [[ "${APPLY_STATUS}" == "Failure" ]]; then
-      echo "Terraform apply failed — exiting with error."
-      exit 1
-  fi
+# Exit non-zero if apply failed so the pipeline step is marked as failed
+if [[ "${APPLY_STATUS}" == "Failure" ]]; then
+    echo "Terraform apply failed — cleaning up..."
+    unset artifactory_token
+    rm -f ${PATH_TO_WORKSPACE}/plantf
+    rm -f ~/.terraform.d/credentials.tfrc.json
+    echo "Cleanup complete. Exiting with error."
+    exit 1
 fi
