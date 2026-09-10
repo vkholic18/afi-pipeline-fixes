@@ -13,7 +13,6 @@
 set_env git-token "$(get_secret git-token)"
 
 export GITHUB_API_KEY=$(get_secret git-token)
-export GITHUB_TOKEN=$(get_secret git-token)
 
 # used for terraform vars(override values without having to use an input)
 # https://developer.hashicorp.com/terraform/cli/config/environment-variables#tf_var_name
