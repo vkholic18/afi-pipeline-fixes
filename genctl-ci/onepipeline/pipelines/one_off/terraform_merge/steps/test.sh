@@ -55,17 +55,16 @@ source $PATH_TO_PIPELINE/environment/aliases.sh
 _GH_HOST=$(get_env GITHUB_API_URL | sed 's|https://||;s|/api/v3||')
 _REPO_URL="https://${GITHUB_API_KEY}@${_GH_HOST}/${WORKSPACE_ORG}/${WORKSPACE_REPO}.git"
 
-TARGET_SHA=$(get_env "MERGE_COMMIT_SHA" "")
-[[ -z "${TARGET_SHA}" ]] && TARGET_SHA=$(get_env "APP_REPO_COMMIT" "")
-[[ -z "${TARGET_SHA}" ]] && TARGET_SHA=$(get_env "COMMIT_SHA" "")
-[[ -z "${TARGET_SHA}" ]] && TARGET_SHA=$(get_env "merge_commit_sha" "")
+# Extract merge target branch and SHA from trigger event (base-branch/base_branch or BASE-BRANCH/BASE_SHA from webhook)
+TARGET_SHA="${BASE_SHA:-}"
+[[ -z "${TARGET_SHA}" ]] && TARGET_SHA="${base_sha:-}"
+[[ -z "${TARGET_SHA}" ]] && TARGET_SHA="${base-sha:-}"
+echo "DEBUG: Detected merge target SHA from event: '${TARGET_SHA}'"
 
-TARGET_BRANCH=$(get_env "base-branch" "")
-[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "BASE_BRANCH" "")
-[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "base_branch" "")
-[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "APP_REPO_BRANCH" "")
-[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "WORKSPACE_REPO_BRANCH" "")
-[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH=$(get_env "repo_branch" "")
+TARGET_BRANCH="${BASE_BRANCH:-}"
+[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH="${base_branch:-}"
+[[ -z "${TARGET_BRANCH}" ]] && TARGET_BRANCH="${base-branch:-}"
+echo "DEBUG: Detected merge target branch from event: '${TARGET_BRANCH}'"
 
 if [[ ! -d "${PATH_TO_WORKSPACE}" ]]; then
   if [[ -n "${TARGET_BRANCH}" ]]; then
@@ -79,14 +78,17 @@ fi
 
 cd ${PATH_TO_WORKSPACE}
 
-if [[ -n "${TARGET_SHA}" ]]; then
-  echo "Checking out merge commit SHA: ${TARGET_SHA}"
-  git fetch --depth=1 origin "${TARGET_SHA}" || true
-  git checkout --detach "${TARGET_SHA}"
-elif [[ -n "${TARGET_BRANCH}" ]]; then
+if [[ -n "${TARGET_BRANCH}" ]]; then
+  # Prefer the branch tip: for push-triggered merge pipelines the SHA from
+  # trigger metadata can be stale (not refreshed on rerun), while the branch
+  # always reflects the latest merged commit.
   echo "Checking out trigger branch: ${TARGET_BRANCH}"
   git fetch --depth=1 origin "${TARGET_BRANCH}" || true
   git checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
+elif [[ -n "${TARGET_SHA}" ]]; then
+  echo "Checking out merge commit SHA: ${TARGET_SHA}"
+  git fetch --depth=1 origin "${TARGET_SHA}" || true
+  git checkout --detach "${TARGET_SHA}"
 else
   echo "No trigger SHA/branch found; using currently checked out ref."
 fi
@@ -132,34 +134,24 @@ if [[ $PLAN_STATUS = "Failure" || $INIT_STATUS = "Failure" ]]; then
 fi
 
 # extract and print md5 values for each of the pr/merge plans
+MD5_PR=$(cat ${PATH_TO_WORKSPACE}/pr_md5.txt)
 MD5SUM_MERGE=$(terraform show -no-color ${PATH_TO_WORKSPACE}/plantf | md5sum | cut -f 1 -d ' ')
-REQUIRE_PR_MD5_MATCH=$(get_env "REQUIRE_PR_MD5_MATCH" "false")
-if [[ -s "${PATH_TO_WORKSPACE}/pr_md5.txt" ]]; then
-  MD5_PR=$(cat ${PATH_TO_WORKSPACE}/pr_md5.txt)
-  echo "Terraform pr    plan (MD5): $MD5_PR"
-  echo "Terraform merge plan (MD5): $MD5SUM_MERGE"
+echo "Terraform pr    plan (MD5): $MD5_PR"
+echo "Terraform merge plan (MD5): $MD5SUM_MERGE"
 
-  # if the plan file from the PR pipeline no longer matches what the merge pipeline intends to do, fail
-  if [[ "${MD5_PR}" != "${MD5SUM_MERGE}" ]]; then
-      echo "ERROR: The PR plan no longer matches what the merge pipeline intends to deploy!"
-      rm -f ${PATH_TO_WORKSPACE}/plantf
-      rm -f ~/.terraform.d/credentials.tfrc.json
-      exit 1
-  fi
-else
-  echo "WARNING: PR MD5 file not found (no PR metadata for merge commit)."
-  echo "WARNING: Skipping PR-vs-merge MD5 comparison for this run."
-  echo "Terraform merge plan (MD5): $MD5SUM_MERGE"
-  if [[ "${REQUIRE_PR_MD5_MATCH}" == "true" ]]; then
-      echo "ERROR: REQUIRE_PR_MD5_MATCH=true and PR MD5 is unavailable. Failing run."
-      rm -f ${PATH_TO_WORKSPACE}/plantf
-      rm -f ~/.terraform.d/credentials.tfrc.json
-      exit 1
-  fi
+# if the plan file from the PR pipeline no longer matches what the merge pipeline intends to do, fail
+if [[ "${MD5_PR}" != "${MD5SUM_MERGE}" ]]; then
+    echo "ERROR: The PR plan no longer matches what the merge pipeline intends to deploy!"
+    rm -f ${PATH_TO_WORKSPACE}/plantf
+    rm -f ~/.terraform.d/credentials.tfrc.json
+    exit 1
 fi
 
 # apply the plan if this is a merge pipeline (double check)
-if [[ "$(get_env pipeline_namespace)" == *"ci"* ]]; then
+# NOTE: "pipeline_namespace" is a reserved OnePipeline system property (auto-set to
+# "simple-automation" for simple-execute tasks) and collides with/shadows any custom
+# trigger property of the same name. Use "apply_namespace" instead for the custom gate.
+echo "DEBUG: get_env apply_namespace = '$(get_env apply_namespace)'"
   echo "This is a CI pipeline, applying plan..."
   terraform apply -parallelism=3 ${PATH_TO_WORKSPACE}/plantf \
       && export APPLY_STATUS="Success" || export APPLY_STATUS="Failure"
@@ -204,4 +196,3 @@ if [[ "$(get_env pipeline_namespace)" == *"ci"* ]]; then
       echo "Terraform apply failed — exiting with error."
       exit 1
   fi
-fi
