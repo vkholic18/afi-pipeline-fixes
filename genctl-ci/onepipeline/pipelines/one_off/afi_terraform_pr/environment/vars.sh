@@ -19,7 +19,9 @@ export APP_REPO_BRANCH=$(get_env "APP_REPO_BRANCH" "main")
 export WORKSPACE_ORG=$(get_env "WORKSPACE_REPO_ORG")
 export WORKSPACE_REPO=$(get_env "WORKSPACE_REPO_NAME")
 export GITHUB_API_URL=$(get_env "GITHUB_API_URL")
-export PR_NUMBER=$(get_env "PR_URL" | grep -o '[^/]*$')
+# PR_ID is injected directly as a $ env var from the trigger payload (body.pull_request.number)
+# Fall back to extracting from PR_URL only if PR_ID is not set
+export PR_NUMBER="${PR_ID:-$(get_env "PR_URL" "" | grep -o '[^/]*$')}"
 
 # used for terraform backend rc file
 export artifactory_domain=$(get_env "ARTIFACTORY_DOMAIN")
