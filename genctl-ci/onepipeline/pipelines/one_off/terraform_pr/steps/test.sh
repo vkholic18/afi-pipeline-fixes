@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # =============================================================================================
 # IBM Confidential
-# (C) Copyright IBM Corp. 2023
+# (C) Copyright IBM Corp. 2026
 # The source code for this program is not published or otherwise divested of its trade secrets,
 # irrespective of what has been deposited with the U.S. Copyright Office.
 # =============================================================================================
 
 set -euo pipefail
-
 
 # Source bash tools
 source ${PATH_TO_GENCTL_CI}/tools/ci_bash_tools/tools.sh
@@ -27,7 +26,7 @@ if which terraform; then
   rm -f $(which terraform)
 fi
 
-terraform_version="$(get_env terraform-version "1.10.2")"
+terraform_version="$(get_env terraform-version "1.15.8")"
 
 curl https://releases.hashicorp.com/terraform/$terraform_version/terraform_${terraform_version}_linux_amd64.zip -o terraform.zip
 unzip -o terraform.zip
@@ -53,7 +52,41 @@ source ${PATH_TO_PIPELINE}/environment/vars.sh
 source ${PATH_TO_PIPELINE}/environment/secrets.sh
 source ${PATH_TO_PIPELINE}/environment/aliases.sh
 
+# Clone app repo if not already present (simple-execute listener does not clone it automatically)
+if [[ ! -d "${PATH_TO_WORKSPACE}" ]]; then
+  _GH_HOST=$(get_env GITHUB_API_URL | sed 's|https://||;s|/api/v3||')
+  # For PR pipeline, extract source branch from PR event (HEAD_BRANCH from environment)
+  _HEAD_REPO="${HEAD_REPO:-}"
+  _CLONE_BRANCH="${PR_HEADBRANCH:-${HEAD_BRANCH:-}}"
+  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="${head_branch:-}"
+  [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="${head-branch:-}"
+  echo "DEBUG: Detected PR clone branch from event: '${_CLONE_BRANCH}'"
+  if [[ -n "${_CLONE_BRANCH}" ]]; then
+   echo "Cloning app repo ${_HEAD_REPO} branch=${_CLONE_BRANCH} into ${PATH_TO_WORKSPACE}..."
+    git clone --branch "${_CLONE_BRANCH}" "https://${GITHUB_API_KEY}@${_HEAD_REPO#https://}" "${PATH_TO_WORKSPACE}"
+  else
+    echo "Cloning app repo ${WORKSPACE_REPO} using remote default branch into ${PATH_TO_WORKSPACE}..."
+    git clone "https://${GITHUB_API_KEY}@${_GH_HOST}/${WORKSPACE_ORG}/${WORKSPACE_REPO}.git" "${PATH_TO_WORKSPACE}"
+  fi
+fi
+
 cd ${PATH_TO_WORKSPACE}
+
+# For PR pipeline, checkout to the specific PR head commit if available
+_PR_SHA="${PR_HEADSHA:-${HEAD_SHA:-}}"
+[[ -z "${_PR_SHA}" ]] && _PR_SHA="${head_sha:-}"
+[[ -z "${_PR_SHA}" ]] && _PR_SHA="${head-sha:-}"
+echo "DEBUG: Detected PR head SHA from event: '${_PR_SHA}'"
+if [[ -n "${_PR_SHA}" ]]; then
+  echo "Checking out PR head commit: ${_PR_SHA}"
+  git fetch --depth=1 origin "${_PR_SHA}" || true
+  git checkout --detach "${_PR_SHA}" 2>/dev/null || git checkout "${_PR_SHA}"
+else
+  echo "Warning: No PR head SHA detected from event; using cloned branch as-is"
+fi
+
+echo "Final checkout commit: $(git rev-parse HEAD)"
+echo "Final checkout branch: $(git branch --show-current || echo '(detached HEAD)')"
 
 # setup artifactory backend creds
 ${PATH_TO_GENCTL_CI}/scripts/terraform_helper_funcs/setup_terraform.sh
@@ -63,9 +96,9 @@ echo "Selecting workspace name: $workspace_name"
 
 # Set the SSH - needed for core module repo clone
 eval "$(ssh-agent -s)"
-ssh-add - <<< "${GIT_PRIVATE_KEY}"
-git config --global user.email "${VAULT_GIT_CONFIG_USER_EMAIL}"
-git config --global user.name "${VAULT_GIT_CONFIG_USERNAME}"
+echo -e "${GIT_PRIVATE_KEY}" | ssh-add -
+git config --global user.email "${VAULT_GIT_CONFIG_USER_EMAIL:-}"
+git config --global user.name "${VAULT_GIT_CONFIG_USERNAME:-}"
 
 set +e
 # running terraform init
@@ -73,10 +106,10 @@ echo "------------------------ Running: terraform init ------------------------"
 terraform init && export INIT_STATUS="Success" || export INIT_STATUS="Failure"
 echo "init status $INIT_STATUS"
 
-export STATE_UNLOCK_ONLY=$(get_env "STATE_UNLOCK_ONLY")
+export STATE_UNLOCK_ONLY=$(get_env "STATE_UNLOCK_ONLY" "0")
 if [[ ${STATE_UNLOCK_ONLY} -eq 1 ]]; then
     echo "Running state unlock only and exiting..."
-    terraform force-unlock -force sys-wcp-genctl-team-1pl-tf-na-terraformbackend-local/tf-ci-${workspace_name}
+    terraform force-unlock -force sys-wcp-genctl-team-1pl-tf-na-afi-terraformbackend-local/tf-afi-${workspace_name}
     exit 0
 fi
 
@@ -84,6 +117,9 @@ echo "------------------------ Running: terraform output -----------------------
 terraform output
 
 echo "------------------------ Running: terraform format and validate ------------------------"
+# Auto-fix formatting in-place — PR branches are auto-generated remotely by Pramod's script
+# and cannot be pre-formatted before push. Fixes trailing spaces and alignment issues.
+terraform fmt -recursive
 terraform fmt -recursive -check -diff && export FMT_STATUS="Success" || export FMT_STATUS="Failure"
 terraform validate -no-color && export VLDT_STATUS="Success" || export VLDT_STATUS="Failure"
 echo "format status $FMT_STATUS, validate status $VLDT_STATUS"
@@ -103,9 +139,45 @@ export PLAN_SUMMARY=$(grep -E '^Plan:' ${PATH_TO_WORKSPACE}/plan_show.txt || ech
 echo "Plan summary: $PLAN_SUMMARY"
 
 echo "This is a PR pipeline, sending plan report"
+# Validate PR_NUMBER is set before proceeding
+if [[ -z "${PR_NUMBER:-}" ]]; then
+  echo "WARNING: PR_NUMBER is empty, using alternative extraction methods..."
+  # Try to extract from PULL_REQUEST_URL or other available variables
+  if [[ -n "${PULL_REQUEST_URL:-}" ]]; then
+    export PR_NUMBER=$(echo "${PULL_REQUEST_URL}" | grep -o '[^/]*$')
+  elif [[ -n "${PR_URL:-}" ]]; then
+    export PR_NUMBER=$(echo "${PR_URL}" | grep -o '[^/]*$')
+  else
+    echo "ERROR: Could not determine PR_NUMBER. Pipeline properties may not be set correctly."
+    exit 1
+  fi
+  echo "Extracted PR_NUMBER: $PR_NUMBER"
+fi
+
 python3 -m pip install -r ${PATH_TO_GENCTL_CI}/scripts/terraform_helper_funcs/requirements.txt
-echo python3 ${PATH_TO_GENCTL_CI}/scripts/terraform_helper_funcs/add_comment.py -pn $PR_NUMBER
+echo "Running: python3 ${PATH_TO_GENCTL_CI}/scripts/terraform_helper_funcs/add_comment.py -pn $PR_NUMBER"
 python3 ${PATH_TO_GENCTL_CI}/scripts/terraform_helper_funcs/add_comment.py -pn $PR_NUMBER
+
+# Send Slack notification — verdict reflects plan success/failure
+if [[ "${PLAN_STATUS}" == "Success" ]]; then
+    _PLAN_VERDICT="SUCCESS"
+    _PLAN_SUMMARY_LABEL="Plan: SUCCESS | ${PLAN_SUMMARY}"
+else
+    _PLAN_VERDICT="FAILURE"
+    _PLAN_SUMMARY_LABEL="Plan: FAILURE | ${PLAN_SUMMARY}"
+fi
+bash "${PATH_TO_GENCTL_CI}/onepipeline/utils/notify_terraform_review.sh" \
+    --webhook-url    "${SLACK_WEBHOOK_URL:-}" \
+    --channel        "${SLACK_CHANNEL:-}" \
+    --verdict        "${_PLAN_VERDICT}" \
+    --pr-url         "https://$(get_env GITHUB_API_URL | sed 's|https://||;s|/api/v3||')/${WORKSPACE_ORG}/${WORKSPACE_REPO}/pull/${PR_NUMBER}" \
+    --pipeline-url   "${PIPELINE_RUN_URL:-}" \
+    --tag-group      "${SLACK_TAG_GROUP:-}" \
+    --workspace      "${workspace_name}" \
+    --mode           "toolchain" \
+    --pipeline-type  "PR" \
+    --repo           "${WORKSPACE_REPO:-}" \
+    --plan-summary   "${_PLAN_SUMMARY_LABEL}" || true
 
 unset artifactory_token
 rm -f ${PATH_TO_WORKSPACE}/plantf
