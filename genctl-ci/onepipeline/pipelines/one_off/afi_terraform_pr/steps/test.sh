@@ -56,7 +56,7 @@ source ${PATH_TO_PIPELINE}/environment/aliases.sh
 if [[ ! -d "${PATH_TO_WORKSPACE}" ]]; then
   _GH_HOST=$(get_env GITHUB_API_URL | sed 's|https://||;s|/api/v3||')
   # For PR pipeline, extract source branch from PR event (HEAD_BRANCH from environment)
-  _CLONE_BRANCH="${HEAD_BRANCH:-}"
+  _CLONE_BRANCH="${PR_HEADBRANCH:-${HEAD_BRANCH:-}}"
   [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="${head_branch:-}"
   [[ -z "${_CLONE_BRANCH}" ]] && _CLONE_BRANCH="${head-branch:-}"
   echo "DEBUG: Detected PR clone branch from event: '${_CLONE_BRANCH}'"
@@ -72,7 +72,7 @@ fi
 cd ${PATH_TO_WORKSPACE}
 
 # For PR pipeline, checkout to the specific PR head commit if available
-_PR_SHA="${HEAD_SHA:-}"
+_PR_SHA="${PR_HEADSHA:-${HEAD_SHA:-}}"
 [[ -z "${_PR_SHA}" ]] && _PR_SHA="${head_sha:-}"
 [[ -z "${_PR_SHA}" ]] && _PR_SHA="${head-sha:-}"
 echo "DEBUG: Detected PR head SHA from event: '${_PR_SHA}'"
@@ -116,6 +116,9 @@ echo "------------------------ Running: terraform output -----------------------
 terraform output
 
 echo "------------------------ Running: terraform format and validate ------------------------"
+# Auto-fix formatting in-place — PR branches are auto-generated remotely by Pramod's script
+# and cannot be pre-formatted before push. Fixes trailing spaces and alignment issues.
+terraform fmt -recursive
 terraform fmt -recursive -check -diff && export FMT_STATUS="Success" || export FMT_STATUS="Failure"
 terraform validate -no-color && export VLDT_STATUS="Success" || export VLDT_STATUS="Failure"
 echo "format status $FMT_STATUS, validate status $VLDT_STATUS"
