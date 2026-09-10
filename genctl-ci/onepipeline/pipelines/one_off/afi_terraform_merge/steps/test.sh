@@ -54,9 +54,8 @@ terraform_tfvars_setup
 terraform_env_export
 
 # source required properties
-source $PATH_TO_PIPELINE/environment/vars.sh
-source $PATH_TO_PIPELINE/environment/secrets.sh
-source $PATH_TO_PIPELINE/environment/aliases.sh
+PATH_TO_ENVIRONMENT_DIR="${PATH_TO_PIPELINE}/environment"
+prepare_pipeline_environment "${PATH_TO_ENVIRONMENT_DIR}"
 
 # Clone app repo if not already present, then pin to merge SHA/branch from trigger metadata.
 _GH_HOST=$(get_env GITHUB_API_URL | sed 's|https://||;s|/api/v3||')

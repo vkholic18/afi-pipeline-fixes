@@ -48,9 +48,8 @@ echo "there are cocoa image issues that should be fixed above that require us to
 set -u
 
 # source required properties
-source ${PATH_TO_PIPELINE}/environment/vars.sh
-source ${PATH_TO_PIPELINE}/environment/secrets.sh
-source ${PATH_TO_PIPELINE}/environment/aliases.sh
+PATH_TO_ENVIRONMENT_DIR="${PATH_TO_PIPELINE}/environment"
+prepare_pipeline_environment "${PATH_TO_ENVIRONMENT_DIR}"
 
 # Clone app repo if not already present (simple-execute listener does not clone it automatically)
 if [[ ! -d "${PATH_TO_WORKSPACE}" ]]; then
