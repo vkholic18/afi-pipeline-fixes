@@ -8,6 +8,13 @@
 
 set -o pipefail
 
+# Cleans up sensitive/temp state left behind by a failed terraform run
+cleanup_on_failure() {
+  unset artifactory_token
+  rm -f ${PATH_TO_WORKSPACE}/plantf
+  rm -f ~/.terraform.d/credentials.tfrc.json
+}
+
 # Source bash tools
 source ${PATH_TO_GENCTL_CI}/tools/ci_bash_tools/tools.sh
 
@@ -127,9 +134,7 @@ python3 ${PATH_TO_GENCTL_CI}/scripts/terraform_helper_funcs/get_pr_md5.py -o ${P
 # checking for status failure
 if [[ $PLAN_STATUS = "Failure" || $INIT_STATUS = "Failure" ]]; then
   echo "Preliminary checks failed, exiting..."
-  unset artifactory_token
-  rm -f ${PATH_TO_WORKSPACE}/plantf
-  rm -f ~/.terraform.d/credentials.tfrc.json
+  cleanup_on_failure
   exit 1
 fi
 
@@ -142,8 +147,7 @@ echo "Terraform merge plan (MD5): $MD5SUM_MERGE"
 # if the plan file from the PR pipeline no longer matches what the merge pipeline intends to do, fail
 if [[ "${MD5_PR}" != "${MD5SUM_MERGE}" ]]; then
     echo "ERROR: The PR plan no longer matches what the merge pipeline intends to deploy!"
-    rm -f ${PATH_TO_WORKSPACE}/plantf
-    rm -f ~/.terraform.d/credentials.tfrc.json
+    cleanup_on_failure
     exit 1
 fi
 
@@ -190,9 +194,7 @@ bash "${UTILS_DIR}/notify_terraform_review.sh" \
 # Exit non-zero if apply failed so the pipeline step is marked as failed
 if [[ "${APPLY_STATUS}" == "Failure" ]]; then
     echo "Terraform apply failed — cleaning up..."
-    unset artifactory_token
-    rm -f ${PATH_TO_WORKSPACE}/plantf
-    rm -f ~/.terraform.d/credentials.tfrc.json
+    cleanup_on_failure
     echo "Cleanup complete. Exiting with error."
     exit 1
 fi
