@@ -12,8 +12,8 @@
 # Resolve ref:// secret references into env vars so get_env works for the rest
 set_env git-token "$(get_secret git-token)"
 
-export GITHUB_API_KEY=$(get_env git-token)
-
+export GITHUB_API_KEY=$(get_secret git-token)
+export GITHUB_API_KEY="$(get_secret git-token)"
 # used for terraform vars(override values without having to use an input)
 # https://developer.hashicorp.com/terraform/cli/config/environment-variables#tf_var_name
 export TF_VAR_ibmgit_api_key=$GITHUB_API_KEY
@@ -29,7 +29,7 @@ env_props_secure=(
     "VAULT_GIT_CONFIG_USERNAME:vault-git-config-username"
 
     "SLACK_WEBHOOK_URL:slack-webhook-url"
-  
+ 
 )
 
 env_props_text=(
