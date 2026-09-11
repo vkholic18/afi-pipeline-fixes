@@ -29,8 +29,7 @@ env_props_secure=(
     "VAULT_GIT_CONFIG_USERNAME:vault-git-config-username"
 
     "SLACK_WEBHOOK_URL:slack-webhook-url"
-    "BOBSHELL_API_KEY:bob-api-key"
- 
+
 )
 
 env_props_text=(
