@@ -13,7 +13,6 @@
 # which is artifactory, it allows us to pick the workspace we are working against
 # This is not a reference to a git repository workspace!
 export workspace_name=$(get_env "workspace_name")
-export APP_REPO_BRANCH=$(get_env "APP_REPO_BRANCH" "main")
 
 # workspace information for python script
 export WORKSPACE_ORG=$(get_env "WORKSPACE_REPO_ORG")
@@ -36,7 +35,3 @@ export TF_CLI_ARGS_plan=$(get_env "TF_CLI_ARGS_plan")
 # SLACK_TAG_GROUP    — Slack subteam/group ID to tag, e.g. S012345 (optional)
 export SLACK_CHANNEL=$(get_env "slack-channel" "")
 export SLACK_TAG_GROUP=$(get_env "slack-tag-group" "")
-
-### Used in auto-merge ###
-export APPROVE_BEFORE_MERGE="true"
-export MERGE_METHOD="squash"
